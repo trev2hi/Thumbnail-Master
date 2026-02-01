@@ -1,0 +1,96 @@
+# =============================================================================
+# Git Attributes Configuration
+# =============================================================================
+# Ensures consistent behavior across different operating systems and editors
+
+# -----------------------------------------------------------------------------
+# Auto-detect text files and normalize line endings
+# -----------------------------------------------------------------------------
+* text=auto
+
+# -----------------------------------------------------------------------------
+# Source Code - Force LF line endings
+# -----------------------------------------------------------------------------
+*.py text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.htm text eol=lf
+*.json text eol=lf
+*.xml text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+
+# -----------------------------------------------------------------------------
+# Documentation - Force LF line endings
+# -----------------------------------------------------------------------------
+*.md text eol=lf
+*.txt text eol=lf
+*.rst text eol=lf
+LICENSE text eol=lf
+README text eol=lf
+
+# -----------------------------------------------------------------------------
+# Configuration Files
+# -----------------------------------------------------------------------------
+*.ini text eol=lf
+*.cfg text eol=lf
+*.conf text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+.editorconfig text eol=lf
+requirements.txt text eol=lf
+Makefile text eol=lf
+
+# -----------------------------------------------------------------------------
+# Shell Scripts
+# -----------------------------------------------------------------------------
+*.sh text eol=lf
+*.bash text eol=lf
+
+# -----------------------------------------------------------------------------
+# Windows-Specific Scripts - Force CRLF
+# -----------------------------------------------------------------------------
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# -----------------------------------------------------------------------------
+# Binary Files - Treat as binary (no line ending conversion)
+# -----------------------------------------------------------------------------
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.bmp binary
+*.tiff binary
+
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
+
+*.zip binary
+*.tar binary
+*.gz binary
+*.7z binary
+*.rar binary
+
+*.pdf binary
+*.doc binary
+*.docx binary
+
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
+
+# -----------------------------------------------------------------------------
+# Diff Settings - Better diff for specific file types
+# -----------------------------------------------------------------------------
+*.py diff=python
+*.html diff=html
+*.css diff=css
+*.md diff=markdown
