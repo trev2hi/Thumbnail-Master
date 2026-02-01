@@ -107,15 +107,15 @@ body {
    NAVIGATION
    ═══════════════════════════════════════════════════════════════ */
 .navbar {
-    background: var(--glass-bg) !important;
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    background: rgba(15, 15, 26, 0.95) !important;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--glass-border);
     padding: 0.75rem 1rem;
     position: sticky;
     top: 0;
     z-index: 1030;
-    transition: var(--transition-normal);
+    transition: background 0.2s ease;
 }
 
 .navbar::before {
@@ -177,25 +177,9 @@ body {
     font-weight: 500;
     padding: 0.5rem 1rem;
     border-radius: var(--border-radius-md);
-    transition: all var(--transition-normal);
+    transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
     border: none;
     position: relative;
-    overflow: hidden;
-}
-
-.btn::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-    transition: var(--transition-slow);
-}
-
-.btn:hover::before {
-    left: 100%;
 }
 
 .btn-primary {
@@ -322,13 +306,13 @@ body {
    CARDS
    ═══════════════════════════════════════════════════════════════ */
 .card {
-    background: var(--glass-bg);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    background: rgba(26, 26, 46, 0.95);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     border: 1px solid var(--glass-border);
     border-radius: var(--border-radius-lg);
     box-shadow: var(--shadow-md);
-    transition: all var(--transition-normal);
+    transition: border-color 0.2s ease;
 }
 
 .card:hover {
@@ -351,10 +335,10 @@ body {
    CACHE FILES CARD
    ═══════════════════════════════════════════════════════════════ */
 .cache-files-card {
-    background: var(--glass-bg);
+    background: rgba(26, 26, 46, 0.95);
     border: 1px solid var(--glass-border);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
 }
 
 .cache-files-card .card-header {
@@ -509,17 +493,12 @@ body {
     }
 }
 
-/* Staggered animation for thumbnails */
-#thumbnail-gallery > .col-auto:nth-child(1) { animation-delay: 0.02s; }
-#thumbnail-gallery > .col-auto:nth-child(2) { animation-delay: 0.04s; }
-#thumbnail-gallery > .col-auto:nth-child(3) { animation-delay: 0.06s; }
-#thumbnail-gallery > .col-auto:nth-child(4) { animation-delay: 0.08s; }
-#thumbnail-gallery > .col-auto:nth-child(5) { animation-delay: 0.1s; }
-#thumbnail-gallery > .col-auto:nth-child(6) { animation-delay: 0.12s; }
-#thumbnail-gallery > .col-auto:nth-child(7) { animation-delay: 0.14s; }
-#thumbnail-gallery > .col-auto:nth-child(8) { animation-delay: 0.16s; }
-#thumbnail-gallery > .col-auto:nth-child(9) { animation-delay: 0.18s; }
-#thumbnail-gallery > .col-auto:nth-child(10) { animation-delay: 0.2s; }
+/* Staggered animation for thumbnails - only first few items */
+/* Animation delays are now set via JavaScript for better control */
+/* These are fallback styles for the first items only */
+body:not(.performance-mode) #thumbnail-gallery > .col-auto:nth-child(-n+5) {
+    animation: thumbnailEnter 0.3s ease-out backwards;
+}
 
 /* ═══════════════════════════════════════════════════════════════
    THUMBNAIL CARDS
@@ -531,7 +510,8 @@ body {
     border-radius: var(--border-radius-md);
     overflow: hidden;
     cursor: pointer;
-    transition: all var(--transition-normal);
+    /* Use specific properties instead of 'all' for better performance */
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
     background: var(--bg-surface);
     border: 1px solid var(--glass-border);
     box-shadow: var(--shadow-sm);
@@ -549,8 +529,8 @@ body {
 }
 
 .thumbnail-card:hover {
-    transform: translateY(-8px) scale(1.02);
-    box-shadow: var(--shadow-lg), 0 0 40px rgba(99, 102, 241, 0.15);
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md);
     border-color: var(--primary);
     z-index: 10;
 }
@@ -563,12 +543,13 @@ body {
     width: 100%;
     height: 100%;
     object-fit: contain;
-    background: linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-surface) 100%);
-    transition: transform var(--transition-slow);
+    background: var(--bg-elevated);
+    /* Simpler transition for better performance */
+    transition: transform 0.2s ease;
 }
 
 .thumbnail-card:hover img {
-    transform: scale(1.08);
+    transform: scale(1.03);
 }
 
 .thumbnail-card .select-checkbox {
@@ -1221,4 +1202,158 @@ body {
 
 .modal-backdrop.show {
     opacity: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PERFORMANCE MODE - Optimizations for large datasets (100+ items)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Disable all animations in performance mode */
+.performance-mode #thumbnail-gallery,
+.performance-mode #thumbnail-gallery > .col-auto,
+.performance-mode .thumbnail-card,
+.performance-mode .thumbnail-card img,
+.performance-mode .thumbnail-card .size-badge {
+    animation: none !important;
+    transition: none !important;
+}
+
+/* Disable expensive hover effects in performance mode */
+.performance-mode .thumbnail-card:hover {
+    transform: none;
+    box-shadow: var(--shadow-sm);
+}
+
+.performance-mode .thumbnail-card:hover img {
+    transform: none;
+}
+
+/* Show size badge always in performance mode (no hover reveal) */
+.performance-mode .thumbnail-card .size-badge {
+    opacity: 1;
+    transform: none;
+}
+
+/* Disable pseudo-element overlays */
+.performance-mode .thumbnail-card::before {
+    display: none;
+}
+
+/* Use simpler borders instead of glow effects */
+.performance-mode .thumbnail-card.selected {
+    box-shadow: none;
+    border: 3px solid var(--primary);
+}
+
+/* Simplify card hover */
+.performance-mode .thumbnail-card:hover {
+    border-color: var(--primary);
+    z-index: 1;
+}
+
+/* Content visibility optimization for offscreen items */
+#thumbnail-gallery > .col-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: var(--thumb-size);
+}
+
+/* Contain layout to prevent expensive reflows */
+.thumbnail-card {
+    contain: layout style paint;
+}
+
+/* Reduce backdrop-filter blur radius for better performance */
+@media (prefers-reduced-motion: reduce) {
+    .navbar,
+    .card,
+    .cache-files-card,
+    .modal-backdrop {
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+    
+    * {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
+/* GPU acceleration hints for cards that will animate */
+.thumbnail-card {
+    will-change: auto;
+}
+
+/* Only use will-change on hover when not in performance mode */
+body:not(.performance-mode) .thumbnail-card:hover {
+    will-change: transform, box-shadow;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VIRTUAL SCROLLING - For very large datasets (200+ items)
+   ═══════════════════════════════════════════════════════════════ */
+
+#thumbnail-gallery.virtual-scroll {
+    /* Override flex layout for absolute positioning */
+    display: block !important;
+    min-height: 400px;
+    overflow: visible;
+}
+
+.virtual-scroll-container {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+}
+
+.virtual-scroll-container > .col-auto {
+    pointer-events: auto;
+}
+
+.virtual-scroll .col-auto {
+    /* Absolute positioning for virtual scroll items */
+    display: block;
+    width: var(--thumb-size);
+    height: var(--thumb-size);
+    margin: 0;
+    padding: 0;
+    position: absolute;
+}
+
+/* Disable content-visibility for virtual scroll (we handle it manually) */
+#thumbnail-gallery.virtual-scroll > .virtual-scroll-container > .col-auto {
+    content-visibility: visible;
+    contain-intrinsic-size: auto;
+    contain: none;
+}
+
+/* Optimize paint during scroll - use GPU acceleration */
+.virtual-scroll .thumbnail-card {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    will-change: auto;
+}
+
+/* Disable hover effects during scroll for performance */
+.is-scrolling .thumbnail-card {
+    pointer-events: none;
+}
+
+.is-scrolling .thumbnail-card,
+.is-scrolling .thumbnail-card:hover {
+    transform: translateZ(0) !important;
+    box-shadow: var(--shadow-sm) !important;
+    border-color: var(--glass-border) !important;
+}
+
+.is-scrolling .thumbnail-card .size-badge {
+    opacity: 0 !important;
+}
+
+/* Disable transitions globally while scrolling */
+.is-scrolling * {
+    transition: none !important;
 }

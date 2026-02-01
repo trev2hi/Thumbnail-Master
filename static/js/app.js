@@ -25,16 +25,48 @@ class ThumbnailViewer {
         // Animation state
         this.isLoading = false;
         
+        // Performance mode threshold - disable animations above this count
+        this.performanceThreshold = 100;
+        
+        // Virtual scrolling settings
+        this.virtualScrollThreshold = 200; // Enable virtual scroll above this count
+        this.virtualScrollEnabled = false;
+        this.allThumbnails = []; // Store all thumbnails for virtual scroll
+        this.visibleRange = { start: 0, end: 0 };
+        this.rowHeight = 172; // thumb size (160) + gap (12)
+        this.itemsPerRow = 1;
+        this.scrollRAF = null;
+        
         this.init();
     }
     
     init() {
         this.bindElements();
         this.bindEvents();
+        this.bindScrollOptimizations();
         this.loadCacheFiles();
         this.loadFilterOptions();
         this.loadThumbnails();
         this.loadStats();
+    }
+    
+    bindScrollOptimizations() {
+        // Disable hover effects during scroll for better performance
+        let scrollTimeout;
+        let isScrolling = false;
+        
+        window.addEventListener('scroll', () => {
+            if (!isScrolling) {
+                isScrolling = true;
+                document.body.classList.add('is-scrolling');
+            }
+            
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(() => {
+                isScrolling = false;
+                document.body.classList.remove('is-scrolling');
+            }, 150);
+        }, { passive: true });
     }
     
     bindElements() {
@@ -123,6 +155,48 @@ class ThumbnailViewer {
         // Cache file selection buttons
         this.selectAllFilesBtn.addEventListener('click', () => this.selectAllCacheFiles());
         this.deselectAllFilesBtn.addEventListener('click', () => this.deselectAllCacheFiles());
+        
+        // Event delegation for thumbnail gallery (instead of per-card listeners)
+        // This is MUCH more performant for large numbers of items
+        this.gallery.addEventListener('click', (e) => {
+            const card = e.target.closest('.thumbnail-card');
+            if (!card) return;
+            
+            if (this.selectMode) {
+                e.preventDefault();
+                const id = parseInt(card.dataset.id);
+                this.toggleSelection(id, card);
+            } else {
+                try {
+                    const thumbData = JSON.parse(card.dataset.thumbData);
+                    this.showThumbnailDetail(thumbData);
+                } catch (err) {
+                    console.error('Failed to parse thumbnail data:', err);
+                }
+            }
+        });
+        
+        // Keyboard accessibility via delegation
+        this.gallery.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            
+            const card = e.target.closest('.thumbnail-card');
+            if (!card) return;
+            
+            e.preventDefault();
+            const id = parseInt(card.dataset.id);
+            
+            if (this.selectMode) {
+                this.toggleSelection(id, card);
+            } else {
+                try {
+                    const thumbData = JSON.parse(card.dataset.thumbData);
+                    this.showThumbnailDetail(thumbData);
+                } catch (err) {
+                    console.error('Failed to parse thumbnail data:', err);
+                }
+            }
+        });
     }
     
     async loadFilterOptions() {
@@ -321,6 +395,9 @@ class ThumbnailViewer {
     }
     
     renderThumbnails(thumbnails, noDatabasesSelected = false) {
+        // Clean up any existing virtual scroll
+        this.disableVirtualScroll();
+        
         if (thumbnails.length === 0) {
             this.gallery.classList.add('d-none');
             this.emptyState.classList.remove('d-none');
@@ -342,23 +419,220 @@ class ThumbnailViewer {
         
         this.emptyState.classList.add('d-none');
         this.gallery.classList.remove('d-none');
-        this.gallery.innerHTML = '';
+        
+        // Enable/disable performance mode based on item count
+        const isPerformanceMode = thumbnails.length > this.performanceThreshold;
+        document.body.classList.toggle('performance-mode', isPerformanceMode);
+        
+        // Use virtual scrolling for very large datasets
+        if (thumbnails.length > this.virtualScrollThreshold) {
+            this.enableVirtualScroll(thumbnails);
+            return;
+        }
+        
+        // Standard rendering for smaller datasets
+        const fragment = document.createDocumentFragment();
+        const showAnimations = !isPerformanceMode;
         
         thumbnails.forEach((thumb, index) => {
-            const card = this.createThumbnailCard(thumb, index);
-            this.gallery.appendChild(card);
+            const card = this.createThumbnailCard(thumb, index, showAnimations);
+            fragment.appendChild(card);
+        });
+        
+        this.gallery.innerHTML = '';
+        this.gallery.appendChild(fragment);
+    }
+    
+    enableVirtualScroll(thumbnails) {
+        this.virtualScrollEnabled = true;
+        this.allThumbnails = thumbnails;
+        
+        // Calculate items per row based on container width
+        this.calculateItemsPerRow();
+        
+        // Calculate total height needed
+        const totalRows = Math.ceil(thumbnails.length / this.itemsPerRow);
+        const totalHeight = totalRows * this.rowHeight;
+        
+        // Set up the gallery for virtual scrolling
+        this.gallery.innerHTML = '';
+        this.gallery.style.position = 'relative';
+        this.gallery.style.height = `${totalHeight}px`;
+        this.gallery.classList.add('virtual-scroll');
+        
+        // Create a container for visible items
+        this.virtualContainer = document.createElement('div');
+        this.virtualContainer.className = 'virtual-scroll-container';
+        this.virtualContainer.style.position = 'absolute';
+        this.virtualContainer.style.top = '0';
+        this.virtualContainer.style.left = '0';
+        this.virtualContainer.style.right = '0';
+        this.gallery.appendChild(this.virtualContainer);
+        
+        // Bind scroll handler with passive flag for performance
+        this.boundScrollHandler = this.onVirtualScroll.bind(this);
+        this.boundResizeHandler = this.onVirtualResize.bind(this);
+        window.addEventListener('scroll', this.boundScrollHandler, { passive: true });
+        window.addEventListener('resize', this.boundResizeHandler, { passive: true });
+        
+        // Initial render
+        this.updateVirtualScroll();
+    }
+    
+    onVirtualResize() {
+        // Debounce resize events
+        if (this.resizeTimeout) clearTimeout(this.resizeTimeout);
+        
+        this.resizeTimeout = setTimeout(() => {
+            if (!this.virtualScrollEnabled) return;
+            
+            // Recalculate layout
+            const oldItemsPerRow = this.itemsPerRow;
+            this.calculateItemsPerRow();
+            
+            // Only recalculate if items per row changed
+            if (oldItemsPerRow !== this.itemsPerRow) {
+                const totalRows = Math.ceil(this.allThumbnails.length / this.itemsPerRow);
+                const totalHeight = totalRows * this.rowHeight;
+                this.gallery.style.height = `${totalHeight}px`;
+                this.visibleRange = { start: -1, end: -1 }; // Force re-render
+            }
+            
+            this.updateVirtualScroll();
+        }, 100);
+    }
+    
+    disableVirtualScroll() {
+        if (this.virtualScrollEnabled) {
+            this.virtualScrollEnabled = false;
+            this.allThumbnails = [];
+            
+            if (this.boundScrollHandler) {
+                window.removeEventListener('scroll', this.boundScrollHandler);
+                this.boundScrollHandler = null;
+            }
+            
+            if (this.boundResizeHandler) {
+                window.removeEventListener('resize', this.boundResizeHandler);
+                this.boundResizeHandler = null;
+            }
+            
+            if (this.scrollRAF) {
+                cancelAnimationFrame(this.scrollRAF);
+                this.scrollRAF = null;
+            }
+            
+            if (this.resizeTimeout) {
+                clearTimeout(this.resizeTimeout);
+                this.resizeTimeout = null;
+            }
+            
+            this.gallery.style.height = '';
+            this.gallery.style.position = '';
+            this.gallery.classList.remove('virtual-scroll');
+            this.visibleRange = { start: 0, end: 0 };
+        }
+    }
+    
+    calculateItemsPerRow() {
+        const galleryWidth = this.gallery.offsetWidth;
+        const itemWidth = 172; // thumb size (160) + gap (12)
+        this.itemsPerRow = Math.max(1, Math.floor(galleryWidth / itemWidth));
+    }
+    
+    onVirtualScroll() {
+        // Use requestAnimationFrame to throttle scroll updates
+        if (this.scrollRAF) return;
+        
+        this.scrollRAF = requestAnimationFrame(() => {
+            this.scrollRAF = null;
+            this.updateVirtualScroll();
         });
     }
     
-    createThumbnailCard(thumb, index = 0) {
+    updateVirtualScroll() {
+        if (!this.virtualScrollEnabled) return;
+        
+        // Recalculate items per row (in case of resize)
+        this.calculateItemsPerRow();
+        
+        const scrollTop = window.scrollY;
+        const viewportHeight = window.innerHeight;
+        const galleryRect = this.gallery.getBoundingClientRect();
+        const galleryTop = galleryRect.top + scrollTop;
+        
+        // Calculate visible range with buffer (render 2 extra rows above/below)
+        const buffer = 3;
+        const relativeScroll = Math.max(0, scrollTop - galleryTop);
+        const startRow = Math.max(0, Math.floor(relativeScroll / this.rowHeight) - buffer);
+        const visibleRows = Math.ceil(viewportHeight / this.rowHeight) + (buffer * 2);
+        const endRow = startRow + visibleRows;
+        
+        const startIndex = startRow * this.itemsPerRow;
+        const endIndex = Math.min(this.allThumbnails.length, (endRow + 1) * this.itemsPerRow);
+        
+        // Only re-render if the range changed
+        if (startIndex === this.visibleRange.start && endIndex === this.visibleRange.end) {
+            return;
+        }
+        
+        this.visibleRange = { start: startIndex, end: endIndex };
+        
+        // Render only visible items
+        const fragment = document.createDocumentFragment();
+        
+        for (let i = startIndex; i < endIndex; i++) {
+            const thumb = this.allThumbnails[i];
+            if (!thumb) continue;
+            
+            const card = this.createThumbnailCard(thumb, i, false);
+            
+            // Position the card absolutely
+            const row = Math.floor(i / this.itemsPerRow);
+            const col = i % this.itemsPerRow;
+            card.style.position = 'absolute';
+            card.style.top = `${row * this.rowHeight}px`;
+            card.style.left = `${col * 172}px`;
+            
+            fragment.appendChild(card);
+        }
+        
+        this.virtualContainer.innerHTML = '';
+        this.virtualContainer.appendChild(fragment);
+    }
+    
+    createThumbnailCard(thumb, index = 0, showAnimations = true) {
         const col = document.createElement('div');
         col.className = 'col-auto';
-        // Stagger animation delay for smooth grid appearance
-        col.style.animationDelay = `${Math.min(index * 0.02, 0.3)}s`;
+        
+        // Only set animation delay for small result sets
+        if (showAnimations && index < 20) {
+            col.style.animationDelay = `${index * 0.02}s`;
+        }
         
         const card = document.createElement('div');
         card.className = 'thumbnail-card';
         card.dataset.id = thumb.id;
+        
+        // Store thumb data for event delegation
+        card.dataset.thumbData = JSON.stringify({
+            id: thumb.id,
+            dimensions: thumb.dimensions,
+            data_size: thumb.data_size,
+            image_format: thumb.image_format,
+            image_mode: thumb.image_mode,
+            extension: thumb.extension,
+            cache_file: thumb.cache_file,
+            cache_size: thumb.cache_size,
+            cache_key: thumb.cache_key,
+            entry_hash: thumb.entry_hash,
+            hash: thumb.hash,
+            data_checksum: thumb.data_checksum,
+            header_checksum: thumb.header_checksum,
+            last_modified: thumb.last_modified,
+            indexed_at: thumb.indexed_at,
+            flags: thumb.flags
+        });
         
         if (this.selectedIds.has(thumb.id)) {
             card.classList.add('selected');
@@ -378,33 +652,13 @@ class ThumbnailViewer {
         
         card.innerHTML = `
             <input type="checkbox" class="select-checkbox" ${this.selectedIds.has(thumb.id) ? 'checked' : ''}>
-            <img src="/api/thumbnail/${thumb.id}" alt="Thumbnail" loading="lazy">
+            <img src="/api/thumbnail/${thumb.id}" alt="Thumbnail" loading="lazy" decoding="async">
             <span class="size-badge">${badgeText}</span>
         `;
         
-        // Click handler with ripple effect
-        card.addEventListener('click', (e) => {
-            if (this.selectMode) {
-                e.preventDefault();
-                this.toggleSelection(thumb.id, card);
-            } else {
-                this.showThumbnailDetail(thumb);
-            }
-        });
-        
-        // Add keyboard accessibility
+        // Add keyboard accessibility (no event listener - handled by delegation)
         card.setAttribute('tabindex', '0');
         card.setAttribute('role', 'button');
-        card.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                if (this.selectMode) {
-                    this.toggleSelection(thumb.id, card);
-                } else {
-                    this.showThumbnailDetail(thumb);
-                }
-            }
-        });
         
         col.appendChild(card);
         return col;
