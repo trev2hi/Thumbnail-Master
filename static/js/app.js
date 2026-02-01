@@ -1,5 +1,6 @@
 /**
  * Thumbnail Master - Frontend JavaScript
+ * Modern UI with smooth animations
  */
 
 class ThumbnailViewer {
@@ -20,6 +21,9 @@ class ThumbnailViewer {
         this.availableCacheFiles = [];
         this.selectedCacheFiles = new Set();
         this.indexedCacheFiles = new Set();
+        
+        // Animation state
+        this.isLoading = false;
         
         this.init();
     }
@@ -340,15 +344,17 @@ class ThumbnailViewer {
         this.gallery.classList.remove('d-none');
         this.gallery.innerHTML = '';
         
-        thumbnails.forEach(thumb => {
-            const card = this.createThumbnailCard(thumb);
+        thumbnails.forEach((thumb, index) => {
+            const card = this.createThumbnailCard(thumb, index);
             this.gallery.appendChild(card);
         });
     }
     
-    createThumbnailCard(thumb) {
+    createThumbnailCard(thumb, index = 0) {
         const col = document.createElement('div');
         col.className = 'col-auto';
+        // Stagger animation delay for smooth grid appearance
+        col.style.animationDelay = `${Math.min(index * 0.02, 0.3)}s`;
         
         const card = document.createElement('div');
         card.className = 'thumbnail-card';
@@ -376,13 +382,27 @@ class ThumbnailViewer {
             <span class="size-badge">${badgeText}</span>
         `;
         
-        // Click handler
+        // Click handler with ripple effect
         card.addEventListener('click', (e) => {
             if (this.selectMode) {
                 e.preventDefault();
                 this.toggleSelection(thumb.id, card);
             } else {
                 this.showThumbnailDetail(thumb);
+            }
+        });
+        
+        // Add keyboard accessibility
+        card.setAttribute('tabindex', '0');
+        card.setAttribute('role', 'button');
+        card.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                if (this.selectMode) {
+                    this.toggleSelection(thumb.id, card);
+                } else {
+                    this.showThumbnailDetail(thumb);
+                }
             }
         });
         
@@ -396,11 +416,11 @@ class ThumbnailViewer {
         
         if (this.selectMode) {
             this.selectModeBtn.classList.add('active');
-            this.selectModeBtn.innerHTML = '<i class="bi bi-x-lg"></i> Cancel';
+            this.selectModeBtn.innerHTML = '<i class="bi bi-x-lg"></i><span class="d-none d-lg-inline ms-1">Cancel</span>';
             this.exportBtn.classList.remove('d-none');
         } else {
             this.selectModeBtn.classList.remove('active');
-            this.selectModeBtn.innerHTML = '<i class="bi bi-check2-square"></i> Select Mode';
+            this.selectModeBtn.innerHTML = '<i class="bi bi-check2-square"></i><span class="d-none d-lg-inline ms-1">Select</span>';
             this.exportBtn.classList.add('d-none');
             this.selectedIds.clear();
             this.updateSelectedCount();
@@ -803,19 +823,45 @@ class ThumbnailViewer {
     
     showLoading(show) {
         if (show) {
+            this.isLoading = true;
             this.loadingIndicator.classList.remove('d-none');
             this.gallery.classList.add('d-none');
             this.emptyState.classList.add('d-none');
+            // Add fade effect
+            this.loadingIndicator.style.opacity = '0';
+            requestAnimationFrame(() => {
+                this.loadingIndicator.style.transition = 'opacity 0.2s ease';
+                this.loadingIndicator.style.opacity = '1';
+            });
         } else {
-            this.loadingIndicator.classList.add('d-none');
+            this.isLoading = false;
+            this.loadingIndicator.style.opacity = '0';
+            setTimeout(() => {
+                this.loadingIndicator.classList.add('d-none');
+                this.loadingIndicator.style.opacity = '1';
+            }, 200);
         }
     }
     
     showNotification(title, message, type = 'info') {
         const toastEl = document.getElementById('notification-toast');
-        toastEl.className = `toast bg-${type} text-white`;
-        document.getElementById('toast-title').textContent = title;
-        document.getElementById('toast-message').textContent = message;
+        // Reset classes and apply new ones
+        toastEl.className = 'toast';
+        toastEl.classList.add(`bg-${type}`);
+        
+        const titleEl = document.getElementById('toast-title');
+        const messageEl = document.getElementById('toast-message');
+        
+        // Set icon based on type
+        const icons = {
+            success: 'bi-check-circle-fill',
+            danger: 'bi-exclamation-circle-fill',
+            warning: 'bi-exclamation-triangle-fill',
+            info: 'bi-info-circle-fill'
+        };
+        
+        titleEl.innerHTML = `<i class="bi ${icons[type] || icons.info} me-2"></i>${title}`;
+        messageEl.textContent = message;
         this.toast.show();
     }
 }
